@@ -46,6 +46,8 @@ sudo apt-get update -y
 sudo apt-get install -y terraform
 terraform version
 
+
+sleep 10
 # Install kubectl
 echo "Installing kubectl..."
 

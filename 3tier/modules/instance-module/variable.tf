@@ -3,10 +3,10 @@ variable "vpc_id" {
 }
 
 variable "ami" {
-  default = "ami-06e3c045d79fd65d9"
+  default = "ami-0198cdf7458a7a932"
 }
 variable "instance_type" {
-  default = "t3.micro"
+  default = "t2.large"
 }
 variable "web-security_group" {}
 
@@ -17,6 +17,7 @@ variable "web_subnet" {
 variable "mandatory_tags" {
   type = map(string)
   default = {
+    Name       = "3-tier-microservice-instance"
     Environment = "dev"
     Project     = "3-tier-microservice"
   }
