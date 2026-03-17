@@ -53,6 +53,7 @@ module "instance" {
   vpc_id             = module.vpc.new_vpc
   web_subnet         = module.subnet.web_subnet[0]
   web-security_group = module.security_group.web-security_group
+  delete_ec2_eks     = "delete_ec2_eks"  
 
 }
 

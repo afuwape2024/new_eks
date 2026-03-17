@@ -1,110 +1,169 @@
 pipeline {
     agent any
 
+    environment {
+        AWS_REGION = 'us-east-2'
+        TF_DIR     = 'all_resource'
+    }
+
+    parameters {
+        choice(
+            name: 'TERRAFORM_ACTION',
+            choices: ['plan_apply', 'destroy'],
+            description: 'Choose Terraform workflow'
+        )
+    }
+
     stages {
-        stage('Clone') {
+        stage('Show Selected Action') {
             steps {
-                git branch: 'main', url: 'https://github.com/afuwape2024/devops_3tiers.git'
+                echo "Selected TERRAFORM_ACTION = ${params.TERRAFORM_ACTION}"
             }
         }
 
-        stage('terraform init') {
+        stage('Checkout from Git') {
             steps {
-                echo 'Terraform init stage running'
-                sh '''
-                cd realproject/3tier/env/dev && terraform init
-                '''
+                git branch: 'main', url: 'https://github.com/afuwape2024/AWS_VPC_PEERING_TERRAFORM.git'
             }
         }
 
-        stage('terraform plan') {
+        stage('Initialize Terraform') {
             steps {
-                echo 'Terraform plan stage running'
-                sh '''
-                cd realproject/3tier/env/dev && terraform plan
-                '''
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+                    dir("${TF_DIR}") {
+                        sh 'terraform init'
+                    }
+                }
             }
+        }
+
+        stage('Validate Terraform Code') {
+            steps {
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+                    dir("${TF_DIR}") {
+                        sh 'terraform validate'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Format Check') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh 'terraform fmt -check || true'
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            when {
+                expression { params.TERRAFORM_ACTION == 'plan_apply' }
+            }
+            steps {
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+                    dir("${TF_DIR}") {
+                        sh 'terraform plan -out=tfplan'
+                    }
+                }
+            }
+        }
+
+        stage('Approve Apply') {
+            when {
+                expression { params.TERRAFORM_ACTION == 'plan_apply' }
+            }
+            steps {
+                input message: 'Approve Terraform APPLY?', ok: 'Run Apply'
+            }
+        }
+
+        stage('Terraform Apply') {
+            when {
+                expression { params.TERRAFORM_ACTION == 'plan_apply' }
+            }
+            steps {
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+                    dir("${TF_DIR}") {
+                        sh 'terraform apply -auto-approve tfplan'
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Destroy Plan') {
+            when {
+                expression { params.TERRAFORM_ACTION == 'destroy' }
+            }
+            steps {
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+                    dir("${TF_DIR}") {
+                        sh 'terraform plan -destroy -out=tfdestroyplan'
+                    }
+                }
+            }
+        }
+
+        stage('Approve Destroy') {
+            when {
+                expression { params.TERRAFORM_ACTION == 'destroy' }
+            }
+            steps {
+                input message: 'Approve Terraform DESTROY? This will remove resources.', ok: 'Run Destroy'
+            }
+        }
+
+        stage('Terraform Destroy') {
+            when {
+                expression { params.TERRAFORM_ACTION == 'destroy' }
+            }
+            steps {
+                withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
+                    dir("${TF_DIR}") {
+                        sh 'terraform apply -auto-approve tfdestroyplan'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline execution completed.'
+        }
+        success {
+            echo 'Terraform job finished successfully.'
+        }
+        failure {
+            echo 'Terraform job failed.'
+        }
+        aborted {
+            echo 'Terraform job was aborted during approval.'
         }
     }
 }
 
 
-// pipeline {
-//     agent any
+### to clean up jenkins workspace and docker images after pipeline execution, you can add the following steps in the post section of the Jenkinsfile:
+// df -h
+// sudo du -sh /var/lib/jenkins/*
+// sudo du -sh /var/lib/docker 2>/dev/null
+// sudo du -sh /var/log/*
 
-//     parameters {
-//             booleanParam(name: 'PLAN_TERRAFORM', defaultValue: false, description: 'Check to plan Terraform changes')
-//             booleanParam(name: 'APPLY_TERRAFORM', defaultValue: false, description: 'Check to apply Terraform changes')
-//             booleanParam(name: 'DESTROY_TERRAFORM', defaultValue: false, description: 'Check to apply Terraform changes')
-//     }
 
-//     stages {
-//         stage('Clone Repository') {
-//             steps {
-//                 // Clean workspace before cloning (optional)
-//                 deleteDir()
+// sudo apt clean
+// sudo journalctl --vacuum-time=7d
+// sudo rm -rf /tmp/*
 
-//                 // Clone the Git repository
-//                 git branch: 'main',
-//                     url: 'https://github.com/afuwape2024/workspace2.git'
-//                 sh "ls -lart"
-//             }
-//         }
 
-//         stage('Terraform Init') {
-//                     steps {
-//                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-crendentails-rwagh']]){
-//                             dir('infra') {
-//                             sh 'echo "=================Terraform Init=================="'
-//                             sh 'terraform init'
-//                         }
-//                     }
-//                 }
-//         }
+// sudo du -sh /var/lib/jenkins/workspace/*
 
-//         stage('Terraform Plan') {
-//             steps {
-//                 script {
-//                     if (params.PLAN_TERRAFORM) {
-//                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-crendentails-rwagh']]){
-//                             dir('infra') {
-//                                 sh 'echo "=================Terraform Plan=================="'
-//                                 sh 'terraform plan'
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
 
-//         stage('Terraform Apply') {
-//             steps {
-//                 script {
-//                     if (params.APPLY_TERRAFORM) {
-//                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-crendentails-rwagh']]){
-//                             dir('infra') {
-//                                 sh 'echo "=================Terraform Apply=================="'
-//                                 sh 'terraform apply -auto-approve'
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
+// sudo rm -rf /var/lib/jenkins/workspace/<job_name>
 
-//         stage('Terraform Destroy') {
-//             steps {
-//                 script {
-//                     if (params.DESTROY_TERRAFORM) {
-//                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-crendentails-rwagh']]){
-//                             dir('infra') {
-//                                 sh 'echo "=================Terraform Destroy=================="'
-//                                 sh 'terraform destroy -auto-approve'
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
+
+
+// ###check the contents of the Jenkins workspace to confirm cleanup
+// ls /var/lib/jenkins/workspace
+
+// #restart jenkins service to free up resources
+// # sudo systemctl restart jenkins    

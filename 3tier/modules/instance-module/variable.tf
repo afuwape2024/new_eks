@@ -8,6 +8,9 @@ variable "ami" {
 variable "instance_type" {
   default = "t2.large"
 }
+
+variable "delete_ec2_eks" {}
+
 variable "web-security_group" {}
 
 variable "web_subnet" {
